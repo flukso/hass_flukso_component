@@ -9,6 +9,8 @@ from custom_components.flukso import (BINARY_SENSOR_ADD_CALLBACK, cv, vol, get_s
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.core import callback
 from homeassistant.util.dt import utcnow
+from homeassistant.components.binary_sensor import ENTITY_ID_FORMAT
+from homeassistant.util import slugify
 
 DEFAULT_TIMEOUT = 10
 
@@ -29,7 +31,7 @@ def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
         name, device_class, _, _ = get_sensor_details(sensor)
         _LOGGER.debug('adding binary sensor %s with id %s', name, sensor['id'])
         
-        kubemotionsensor = KubeMotionDevice(hass=hass, name=name, state_topic="/sensor/"+sensor['id']+"/"+sensor['data_type'], device_class=device_class, qos=0, force_update=False, timeout=DEFAULT_TIMEOUT, unique_id=None)
+        kubemotionsensor = KubeMotionDevice(hass=hass, name=name, state_topic="/sensor/"+sensor['id']+"/"+sensor['data_type'], device_class=device_class, qos=0, force_update=False, timeout=DEFAULT_TIMEOUT, unique_id=ENTITY_ID_FORMAT.format('{}_{}'.format(slugify(name), sensor['id'])))
         # Add device entity
         async_add_devices([kubemotionsensor])
 
@@ -52,6 +54,7 @@ class KubeMotionDevice(BinarySensorDevice):
         self._force_update = force_update
         self._unique_id = unique_id
         self._timer = None
+        self.entity_id = unique_id
 
     @asyncio.coroutine
     def async_added_to_hass(self):

@@ -8,6 +8,8 @@ from custom_components.flukso import (SENSOR_ADD_CALLBACK, cv, vol, get_sensor_d
 from homeassistant.core import callback
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.helpers import template
+from homeassistant.components.sensor import ENTITY_ID_FORMAT
+from homeassistant.util import slugify
 
 DEPENDENCIES = ['flukso', 'mqtt']
 
@@ -33,7 +35,7 @@ def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
             if sensor['type'] == 'electricity':
                 data_type = 'gauge'
 
-        fluksosensor = FluksoSensor(name=name, state_topic="/sensor/"+sensor['id']+"/"+data_type, qos=0, unit_of_measurement=unit_of_measurement, force_update=True, expire_after=None, icon=icon, device_class=device_class, value_template=default_template, json_attributes=[], unique_id=None)
+        fluksosensor = FluksoSensor(name=name, state_topic="/sensor/"+sensor['id']+"/"+data_type, qos=0, unit_of_measurement=unit_of_measurement, force_update=True, expire_after=None, icon=icon, device_class=device_class, value_template=default_template, json_attributes=[], unique_id=ENTITY_ID_FORMAT.format('{}_{}'.format(slugify(name), sensor['id'])))
         # Add device entity
         async_add_devices([fluksosensor])
     
@@ -60,6 +62,7 @@ class FluksoSensor(Entity):
         self._json_attributes = set(json_attributes)
         self._unique_id = unique_id
         self._attributes = None
+        self.entity_id = unique_id
 
     async def async_added_to_hass(self):
         

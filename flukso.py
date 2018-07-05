@@ -175,11 +175,15 @@ def async_setup(hass, config):
 
             sensor_config = json.loads(msg.payload)
             for key, sensor in sensor_config.items():
-                if 'enable' in sensor and sensor['enable'] == 1 and 'tmpo' in sensor and sensor['tmpo'] == 1:
+                if ('enable' in sensor and sensor['enable'] == 1) and ('tmpo' not in sensor or sensor['tmpo'] == 1):
                     if sensor['id'] not in ignored_devices:
                         if 'class' in sensor and sensor['class'] == 'kube':
                             sensor['name'] = kube_config[str(sensor['kid'])]['name']
-                            if 'type' in sensor and sensor['type'] == 'movement':
+                            if 'type' in sensor and (sensor['type'] == 'movement' or sensor['type'] == 'vibration'):
+                                binary_sensors.append(sensor)
+                            elif 'type' in sensor and sensor['type'] == 'proximity':
+                                _LOGGER.debug('Ignoring proximity sensor: %s', sensor['name'])
+                            elif 'type' in sensor and sensor['type'] == 'vibration':
                                 binary_sensors.append(sensor)
                             else:
                                 sensors.append(sensor)
