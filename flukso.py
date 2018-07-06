@@ -5,13 +5,11 @@ import socket
 import voluptuous as vol
 import ssl
 
-from homeassistant.components.mqtt import (MQTT)
+from homeassistant.components.mqtt import (MQTT, DEFAULT_KEEPALIVE, DEFAULT_QOS)
 from homeassistant.const import (EVENT_HOMEASSISTANT_STOP, CONF_HOST, CONF_PORT, TEMP_CELSIUS, VOLUME_LITERS, DEVICE_CLASS_BATTERY, DEVICE_CLASS_HUMIDITY, DEVICE_CLASS_ILLUMINANCE, DEVICE_CLASS_TEMPERATURE)
 from homeassistant.core import callback, Event
 from homeassistant.helpers.discovery import load_platform
 import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.dispatcher import (
-async_dispatcher_connect)
 
 REQUIREMENTS = ['paho-mqtt==1.3.1']
 DEPENDENCIES = ['mqtt']
@@ -148,14 +146,15 @@ async def async_setup(hass, config):
         tls_version = ssl.PROTOCOL_TLS  # pylint: disable=no-member
     else:
         tls_version = ssl.PROTOCOL_TLSv1
+
     conf = config[DOMAIN]
     host = conf.get(CONF_HOST)
     port = conf.get(CONF_PORT)
     ignored_devices = conf.get(CONF_IGNORE_DEVICES)
 
     client_id = 'ha-flukso'
-    keepalive = 600
-    qos = 0
+    keepalive = DEFAULT_KEEPALIVE
+    qos = DEFAULT_QOS
 
     _LOGGER.debug('Config host: %s port %d', host, port)
     _LOGGER.debug(ignored_devices)
@@ -167,6 +166,7 @@ async def async_setup(hass, config):
         if rc > 0:
             _LOGGER.error("Connected with result code "+str(rc))
         else:
+            _LOGGER.debug('Config client connected to flukso')
             client.subscribe("/device/+/config/flx")
 
     @callback
@@ -219,31 +219,25 @@ async def async_setup(hass, config):
         else:
             _LOGGER.warning('unknown config type: %s', conftype)
 
-    @asyncio.coroutine
-    def connect():
+    async def connect():
         _LOGGER.debug('Connecting to Flukso Mqtt broker and listening for config messages')
-        # subscribe to topics /device/+/config/+
-        # connect to flukso Mqtt broker
         mqttc.on_connect = on_connect
         mqttc.on_message = on_message
         mqttc.connect(host, port=port, keepalive=keepalive)
         mqttc.loop_start()
-        _LOGGER.debug('Connected Flukso broker')
+
+    async def async_stop_mqtt(event: Event):
+        await hass.data[FLUKSO_CLIENT].async_disconnect()
 
     try:
         hass.data[FLUKSO_CLIENT] = MQTT(hass, host, port, client_id, keepalive, None, None, None, None, None, None, None, None, None, tls_version)
     except socket.error:
-        _LOGGER.exception("Can't connect to the broker. "
-                          "Please check your settings and the broker itself")
+        _LOGGER.exception("Can't connect to the broker. Please check your settings and the broker itself")
         return False
-
-    async def async_stop_mqtt(event: Event):
-        """Stop MQTT component."""
-        await hass.data[FLUKSO_CLIENT].async_disconnect()
 
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, async_stop_mqtt)
 
-    success = await hass.data[FLUKSO_CLIENT].async_connect()  # type: bool
+    success = await hass.data[FLUKSO_CLIENT].async_connect()
     if not success:
         return False
     else:

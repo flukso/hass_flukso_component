@@ -19,7 +19,7 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info=N
     if discovery_info is None:
         _LOGGER.error('No discovery info for flukso platform sensor')
         return
-    
+
     _LOGGER.info('Setting up flukso platform sensor')
 
     @asyncio.coroutine
@@ -37,12 +37,12 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info=N
         fluksosensor = FluksoSensor(name=name, state_topic="/sensor/"+sensor['id']+"/"+data_type, qos=0, unit_of_measurement=unit_of_measurement, force_update=True, expire_after=None, icon=icon, device_class=device_class, value_template=default_template, json_attributes=[], unique_id=ENTITY_ID_FORMAT.format('{}_{}'.format(slugify(name), sensor['id'])))
         # Add device entity
         async_add_devices([fluksosensor])
-    
+
     for sensor in discovery_info:
         hass.async_run_job(add_new_device, sensor)
 
 class FluksoSensor(Entity):
-    
+
     def __init__(self, name, state_topic, qos, unit_of_measurement,
                  force_update, expire_after, icon, device_class: Optional[str],
                  value_template, json_attributes, unique_id: Optional[str]):
@@ -64,7 +64,7 @@ class FluksoSensor(Entity):
         self.entity_id = unique_id
 
     async def async_added_to_hass(self):
-        
+
         @callback
         def message_received(topic, payload, qos):
             """Handle new MQTT messages."""

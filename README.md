@@ -18,7 +18,6 @@ logger:
 ```
 
 ### TODO:
-* rewrite to use paho-mqtt and conenct directly to flukso device, instead of creating a bridge between HA en flukso
 * See if we are satisfied with the current unique id. Currently, the id is [sensor type].[name]_[sensor hash] Maybe add the flukso id as well?
 * Integrate in HA source code and add autodiscovery
 * Add support for multiple Flukso's

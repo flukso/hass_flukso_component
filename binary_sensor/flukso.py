@@ -28,7 +28,7 @@ async def async_setup_platform(hass, config, async_add_devices, discovery_info=N
     def add_new_device(sensor):
         name, device_class, _, _ = get_sensor_details(sensor)
         _LOGGER.debug('adding binary sensor %s with id %s', name, sensor['id'])
-        
+
         kubemotionsensor = KubeMotionDevice(hass=hass, name=name, state_topic="/sensor/"+sensor['id']+"/"+sensor['data_type'], device_class=device_class, qos=0, force_update=False, timeout=DEFAULT_TIMEOUT, unique_id=ENTITY_ID_FORMAT.format('{}_{}'.format(slugify(name), sensor['id'])))
         # Add device entity
         async_add_devices([kubemotionsensor])
@@ -70,7 +70,7 @@ class KubeMotionDevice(BinarySensorDevice):
 
             # start the timer
             _LOGGER.debug('starting motion timeout for entity: %s with state_topic: %s', self._name, self._state_topic)
-            
+
             if self._timeout > 0:
                 def _delay_turn_off(now):
                     _LOGGER.debug("%s called delayed (%s sec) turn off", self._name, self._timeout)
