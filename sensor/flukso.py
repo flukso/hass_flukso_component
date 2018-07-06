@@ -2,16 +2,15 @@ import asyncio
 import logging
 from typing import Optional
 
-import homeassistant.components.mqtt as mqtt
 from homeassistant.helpers.entity import Entity
-from custom_components.flukso import (SENSOR_ADD_CALLBACK, cv, vol, get_sensor_details)
+from custom_components.flukso import (FLUKSO_CLIENT, cv, vol, get_sensor_details)
 from homeassistant.core import callback
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.helpers import template
 from homeassistant.components.sensor import ENTITY_ID_FORMAT
 from homeassistant.util import slugify
 
-DEPENDENCIES = ['flukso', 'mqtt']
+DEPENDENCIES = ['flukso']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -103,8 +102,9 @@ class FluksoSensor(Entity):
             self._state = payload
             self.async_schedule_update_ha_state()
 
-        await mqtt.async_subscribe(self.hass, self._state_topic,
-                                   message_received, self._qos)
+        mqttc = self.hass.data[FLUKSO_CLIENT]
+        mqttc.message_callback_add(self._state_topic, message_received)
+        mqttc.loop_start()
 
     @callback
     def value_is_expired(self, *_):

@@ -3,7 +3,8 @@ import logging
 import json
 import voluptuous as vol
 
-from homeassistant.const import (CONF_HOST, CONF_PORT)
+from homeassistant.const import (CONF_HOST, CONF_PORT, TEMP_CELSIUS, VOLUME_LITERS, DEVICE_CLASS_BATTERY, DEVICE_CLASS_HUMIDITY, DEVICE_CLASS_ILLUMINANCE,
+DEVICE_CLASS_TEMPERATURE)
 from homeassistant.core import callback
 from homeassistant.helpers.discovery import load_platform
 import homeassistant.helpers.config_validation as cv
@@ -20,6 +21,7 @@ BINARY_SENSOR_ADD_CALLBACK = 'flukso_add_binary_sensor'
 SENSOR_ADD_CALLBACK = 'flukso_add_sensor'
 
 DOMAIN = 'flukso'
+FLUKSO_CLIENT = 'flukso_client'
 
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
@@ -77,9 +79,9 @@ def get_sensor_details(sensor):
             device_class = 'None'
         elif sensor['type'] == 'temperature':
             name = name + ' ' + sensor['type']
-            device_class = 'temperature'
+            device_class = DEVICE_CLASS_TEMPERATURE
             icon = 'mdi:thermometer'
-            unit_of_measurement = '°C'
+            unit_of_measurement = TEMP_CELSIUS
         elif sensor['type'] == 'movement':
             name = name + ' ' + sensor['type']
             device_class = 'None'
@@ -92,7 +94,7 @@ def get_sensor_details(sensor):
             unit_of_measurement = 'Pa'
         elif sensor['type'] == 'battery':
             name = name + ' ' + sensor['type']
-            device_class = 'battery'
+            device_class = DEVICE_CLASS_BATTERY
             icon = 'mdi:battery'
             unit_of_measurement = 'V'
         elif sensor['type'] == 'vibration':
@@ -109,10 +111,10 @@ def get_sensor_details(sensor):
             name = name + ' ' + sensor['type']
             device_class = 'None'
             icon = 'mdi:water'
-            unit_of_measurement = 'L'
+            unit_of_measurement = VOLUME_LITERS
         elif sensor['type'] == 'light':
             name = name + ' ' + sensor['type']
-            device_class = 'illuminance'
+            device_class = DEVICE_CLASS_ILLUMINANCE
             icon = 'mdi:white-balance-sunny'
             unit_of_measurement = 'lx'
         elif sensor['type'] == 'proximity':
@@ -122,16 +124,16 @@ def get_sensor_details(sensor):
             unit_of_measurement = ''
         elif sensor['type'] == 'humidity':
             name = name + ' ' + sensor['type']
-            device_class = 'humidity'
+            device_class = DEVICE_CLASS_HUMIDITY
             icon = 'mdi:water-percent'
             unit_of_measurement = '%'
         elif sensor['type'] == 'gas':
             device_class = 'None'
             icon = 'mdi:gas-station'
-            unit_of_measurement = 'L'
+            unit_of_measurement = VOLUME_LITERS
         else:
             _LOGGER.warning('Unknown type: %s', sensor['type'])
-    
+
     return name, device_class, icon, unit_of_measurement
 
 @asyncio.coroutine
@@ -141,14 +143,14 @@ def async_setup(hass, config):
     host = conf.get(CONF_HOST)
     port = conf.get(CONF_PORT)
     ignored_devices = conf.get(CONF_IGNORE_DEVICES)
-    
+
     client_id = 'HomeAssistant-FluksoComponent'
     keepalive = 600
     qos = 0
-    
+
     _LOGGER.debug('Config host: %s port %d', host, port)
     _LOGGER.debug(ignored_devices)
-    
+
     mqttc = mqtt.Client(client_id)
     # mqttc.username_pw_set(username, password=password)
 
@@ -166,7 +168,7 @@ def async_setup(hass, config):
         global sensor_config
 
         conftype = msg.topic.split("/")[4]
-    
+
         _LOGGER.debug('configuration type: %s', conftype)
 
         if conftype == "sensor":
@@ -192,23 +194,26 @@ def async_setup(hass, config):
                                 sensor['name'] = flx_config[str(sensor['port'][0])]['name']
                             sensors.append(sensor)
 
+            hass.data[FLUKSO_CLIENT] = client
+            hass.data[FLUKSO_CLIENT].unsubscribe("/device/+/config/sensor")
+            hass.data[FLUKSO_CLIENT].subscribe("/sensor/+/+")
             _LOGGER.debug('Loading platforms')
             load_platform(hass, 'sensor', DOMAIN, sensors)
             load_platform(hass, 'binary_sensor', DOMAIN, binary_sensors)
             _LOGGER.debug('Done loading platforms')
-            mqttc.loop_stop()
-            mqttc.disconnect()
+            # client.loop_stop()
+            # client.disconnect()
         elif conftype == "flx":
             flx_config = json.loads(msg.payload)
-            mqttc.unsubscribe("/device/+/config/flx")
-            mqttc.subscribe("/device/+/config/kube")
+            client.unsubscribe("/device/+/config/flx")
+            client.subscribe("/device/+/config/kube")
         elif conftype == "kube":
             kube_config = json.loads(msg.payload)
-            mqttc.unsubscribe("/device/+/config/kube")
-            mqttc.subscribe("/device/+/config/sensor")
+            client.unsubscribe("/device/+/config/kube")
+            client.subscribe("/device/+/config/sensor")
         else:
             _LOGGER.warning('unknown config type: %s', conftype)
-    
+
     @asyncio.coroutine
     def connect():
         _LOGGER.debug('Connecting to Flukso Mqtt broker and listening for config messages')
@@ -216,6 +221,7 @@ def async_setup(hass, config):
         # connect to flukso Mqtt broker
         mqttc.on_connect = on_connect
         mqttc.on_message = on_message
+        mqttc.enable_logger(_LOGGER)
         mqttc.connect(host, port=port, keepalive=keepalive)
         mqttc.loop_start()
         _LOGGER.debug('Connected Flukso broker')

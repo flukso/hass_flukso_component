@@ -3,9 +3,8 @@ import logging
 from datetime import timedelta
 from typing import Optional
 
-import homeassistant.components.mqtt as mqtt
 from homeassistant.components.binary_sensor import BinarySensorDevice
-from custom_components.flukso import (BINARY_SENSOR_ADD_CALLBACK, cv, vol, get_sensor_details)
+from custom_components.flukso import (FLUKSO_CLIENT, cv, vol, get_sensor_details)
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.core import callback
 from homeassistant.util.dt import utcnow
@@ -14,7 +13,7 @@ from homeassistant.util import slugify
 
 DEFAULT_TIMEOUT = 10
 
-DEPENDENCIES = ['flukso', 'mqtt']
+DEPENDENCIES = ['flukso']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -86,8 +85,9 @@ class KubeMotionDevice(BinarySensorDevice):
             else:
                 _LOGGER.error('Timeout for entity: %s has a bad value: %d', self._name, self._timeout)
 
-        yield from mqtt.async_subscribe(
-            self.hass, self._state_topic, state_message_received, self._qos)
+        mqttc = self._hass.data[FLUKSO_CLIENT]
+        mqttc.message_callback_add(self._state_topic, state_message_received)
+        mqttc.loop_start()
 
     @property
     def should_poll(self):
