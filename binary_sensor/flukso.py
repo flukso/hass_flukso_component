@@ -17,8 +17,7 @@ DEPENDENCIES = ['flukso']
 
 _LOGGER = logging.getLogger(__name__)
 
-@asyncio.coroutine
-def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
+async def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
     if discovery_info is None:
         _LOGGER.error('No discovery info for flukso platform binary sensor')
         return
@@ -55,8 +54,7 @@ class KubeMotionDevice(BinarySensorDevice):
         self._timer = None
         self.entity_id = unique_id
 
-    @asyncio.coroutine
-    def async_added_to_hass(self):
+    async def async_added_to_hass(self):
 
         @callback
         def state_message_received(topic, payload, qos):
@@ -85,9 +83,7 @@ class KubeMotionDevice(BinarySensorDevice):
             else:
                 _LOGGER.error('Timeout for entity: %s has a bad value: %d', self._name, self._timeout)
 
-        mqttc = self._hass.data[FLUKSO_CLIENT]
-        mqttc.message_callback_add(self._state_topic, state_message_received)
-        mqttc.loop_start()
+        await self._hass.data[FLUKSO_CLIENT].async_subscribe(self._state_topic, state_message_received, self._qos, 'utf-8')
 
     @property
     def should_poll(self):

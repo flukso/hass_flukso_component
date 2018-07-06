@@ -2,6 +2,7 @@ import asyncio
 import logging
 from typing import Optional
 
+import homeassistant.components.mqtt as mqtt
 from homeassistant.helpers.entity import Entity
 from custom_components.flukso import (FLUKSO_CLIENT, cv, vol, get_sensor_details)
 from homeassistant.core import callback
@@ -14,8 +15,7 @@ DEPENDENCIES = ['flukso']
 
 _LOGGER = logging.getLogger(__name__)
 
-@asyncio.coroutine
-def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
+async def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
     if discovery_info is None:
         _LOGGER.error('No discovery info for flukso platform sensor')
         return
@@ -102,9 +102,7 @@ class FluksoSensor(Entity):
             self._state = payload
             self.async_schedule_update_ha_state()
 
-        mqttc = self.hass.data[FLUKSO_CLIENT]
-        mqttc.message_callback_add(self._state_topic, message_received)
-        mqttc.loop_start()
+        await self.hass.data[FLUKSO_CLIENT].async_subscribe(self._state_topic, message_received, self._qos, 'utf-8')
 
     @callback
     def value_is_expired(self, *_):
