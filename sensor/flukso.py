@@ -15,34 +15,43 @@ DEPENDENCIES = ['flukso']
 
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
+@asyncio.coroutine
+def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
     if discovery_info is None:
         _LOGGER.error('No discovery info for flukso platform sensor')
         return
-
+    
     _LOGGER.info('Setting up flukso platform sensor')
 
     @asyncio.coroutine
     def add_new_device(sensor):
         default_template = template.Template('{{ value.split(",")[1]|float }}', hass)
+        error_template = template.Template("""{% if (value.split(",")[1]|int) > 0 %}
+            Error ({{ value.split(",")[1]|int }})
+          {% else %}
+            No errors
+          {% endif %}""", hass)
 
         name, device_class, icon, unit_of_measurement = get_sensor_details(sensor)
 
         _LOGGER.debug('adding sensor %s with id %s', name, sensor['id'])
         data_type = sensor['data_type']
+        t = default_template
         if 'type' in sensor:
             if sensor['type'] == 'electricity':
                 data_type = 'gauge'
+            if sensor['type'] == 'error':
+                t = error_template
 
-        fluksosensor = FluksoSensor(name=name, state_topic="/sensor/"+sensor['id']+"/"+data_type, qos=0, unit_of_measurement=unit_of_measurement, force_update=True, expire_after=None, icon=icon, device_class=device_class, value_template=default_template, json_attributes=[], unique_id=ENTITY_ID_FORMAT.format('{}_{}'.format(slugify(name), sensor['id'])))
+        fluksosensor = FluksoSensor(name=name, state_topic="/sensor/"+sensor['id']+"/"+data_type, qos=0, unit_of_measurement=unit_of_measurement, force_update=True, expire_after=None, icon=icon, device_class=device_class, value_template=t, json_attributes=[], unique_id=ENTITY_ID_FORMAT.format('{}_{}'.format(slugify(name), sensor['id'])))
         # Add device entity
         async_add_devices([fluksosensor])
-
+    
     for sensor in discovery_info:
         hass.async_run_job(add_new_device, sensor)
 
 class FluksoSensor(Entity):
-
+    
     def __init__(self, name, state_topic, qos, unit_of_measurement,
                  force_update, expire_after, icon, device_class: Optional[str],
                  value_template, json_attributes, unique_id: Optional[str]):
