@@ -48,7 +48,7 @@ def get_sensor_details(sensor):
     if 'type' in sensor:
         if sensor['type'] == 'electricity':
             if 'subtype' in sensor:
-                name = name + ' ' + sensor['subtype']
+                name = name + ' ' + sensor['type'] + ' ' + sensor['subtype']
                 if sensor['subtype'] == 'q1':
                     unit_of_measurement = 'VAR'
                 elif sensor['subtype'] == 'q2':
