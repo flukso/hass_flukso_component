@@ -5,24 +5,27 @@ import socket
 import voluptuous as vol
 import ssl
 
-from homeassistant.components.mqtt import (MQTT, DEFAULT_KEEPALIVE, DEFAULT_QOS)
-from homeassistant.const import (EVENT_HOMEASSISTANT_STOP, CONF_HOST, CONF_PORT, TEMP_CELSIUS, VOLUME_LITERS, DEVICE_CLASS_BATTERY, DEVICE_CLASS_HUMIDITY, DEVICE_CLASS_ILLUMINANCE, DEVICE_CLASS_TEMPERATURE)
+from homeassistant.components.mqtt import (MQTT, DEFAULT_KEEPALIVE,
+    DEFAULT_QOS)
+from homeassistant.const import (EVENT_HOMEASSISTANT_STOP, CONF_HOST,
+    CONF_PORT, TEMP_CELSIUS, VOLUME_LITERS, DEVICE_CLASS_BATTERY,
+    DEVICE_CLASS_HUMIDITY, DEVICE_CLASS_ILLUMINANCE, DEVICE_CLASS_TEMPERATURE)
 from homeassistant.core import callback, Event
 from homeassistant.helpers.discovery import load_platform
 import homeassistant.helpers.config_validation as cv
 
-REQUIREMENTS = ['paho-mqtt==1.3.1']
-DEPENDENCIES = ['mqtt']
+REQUIREMENTS = ["paho-mqtt==1.3.1"]
+DEPENDENCIES = ["mqtt"]
 
 _LOGGER = logging.getLogger(__name__)
 
-CONF_IGNORE_DEVICES = 'ignore_devices'
+CONF_IGNORE_DEVICES = "ignore_devices"
 
-BINARY_SENSOR_ADD_CALLBACK = 'flukso_add_binary_sensor'
-SENSOR_ADD_CALLBACK = 'flukso_add_sensor'
+BINARY_SENSOR_ADD_CALLBACK = "flukso_add_binary_sensor"
+SENSOR_ADD_CALLBACK = "flukso_add_sensor"
 
-DOMAIN = 'flukso'
-FLUKSO_CLIENT = 'flukso_client'
+DOMAIN = "flukso"
+FLUKSO_CLIENT = "flukso_client"
 
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
@@ -31,109 +34,110 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Optional(CONF_IGNORE_DEVICES, default=[]):
             vol.All(cv.ensure_list, [cv.string]),
     }),
-}, extra=vol.ALLOW_EXTRA) # what does this mean?
+}, extra=vol.ALLOW_EXTRA)  # what does this mean?
 
 sensor_config = {}
 kube_config = {}
 flx_config = {}
 
-def get_sensor_details(sensor):
-    name = 'flukso sensor'
-    if 'name' in sensor:
-        name = sensor['name']
-    device_class = 'None'
-    icon = ''
-    unit_of_measurement = ''
 
-    if 'type' in sensor:
-        if sensor['type'] == 'electricity':
-            if 'subtype' in sensor:
-                name = name + ' ' + sensor['type'] + ' ' + sensor['subtype']
-                if sensor['subtype'] == 'q1':
-                    unit_of_measurement = 'VAR'
-                elif sensor['subtype'] == 'q2':
-                    unit_of_measurement = 'VAR'
-                elif sensor['subtype'] == 'q3':
-                    unit_of_measurement = 'VAR'
-                elif sensor['subtype'] == 'q4':
-                    unit_of_measurement = 'VAR'
-                elif sensor['subtype'] == 'pplus':
-                    unit_of_measurement = 'W'
-                elif sensor['subtype'] == 'pminus':
-                    unit_of_measurement = 'W'
-                elif sensor['subtype'] == 'vrms':
-                    unit_of_measurement = 'V'
-                elif sensor['subtype'] == 'irms':
-                    unit_of_measurement = 'A'
-                # elif sensor['subtype'] == 'pf':
-                #     unit_of_measurement = ''
-                # elif sensor['subtype'] == 'vthd':
-                #     unit_of_measurement = ''
-                # elif sensor['subtype'] == 'ithd':
-                #     unit_of_measurement = ''
-                # elif sensor['subtype'] == 'alpha':
-                #     unit_of_measurement = ''
+def get_sensor_details(sensor):
+    name = "flukso sensor"
+    if "name" in sensor:
+        name = sensor["name"]
+    device_class = "None"
+    icon = ""
+    unit_of_measurement = ""
+
+    if "type" in sensor:
+        if sensor["type"] == "electricity":
+            if "subtype" in sensor:
+                name = name + " " + sensor["type"] + " " + sensor["subtype"]
+                if sensor["subtype"] == "q1":
+                    unit_of_measurement = "VAR"
+                elif sensor["subtype"] == "q2":
+                    unit_of_measurement = "VAR"
+                elif sensor["subtype"] == "q3":
+                    unit_of_measurement = "VAR"
+                elif sensor["subtype"] == "q4":
+                    unit_of_measurement = "VAR"
+                elif sensor["subtype"] == "pplus":
+                    unit_of_measurement = "W"
+                elif sensor["subtype"] == "pminus":
+                    unit_of_measurement = "W"
+                elif sensor["subtype"] == "vrms":
+                    unit_of_measurement = "V"
+                elif sensor["subtype"] == "irms":
+                    unit_of_measurement = "A"
+                # elif sensor["subtype"] == "pf":
+                #     unit_of_measurement = ""
+                # elif sensor["subtype"] == "vthd":
+                #     unit_of_measurement = ""
+                # elif sensor["subtype"] == "ithd":
+                #     unit_of_measurement = ""
+                # elif sensor["subtype"] == "alpha":
+                #     unit_of_measurement = ""
                 else:
-                    unit_of_measurement = ''
-                    _LOGGER.warning('Unknown subtype: %s', sensor['subtype'])
-            icon = 'mdi:flash'
-            device_class = 'None'
-        elif sensor['type'] == 'temperature':
-            name = name + ' ' + sensor['type']
+                    unit_of_measurement = ""
+                    _LOGGER.warning("Unknown subtype: %s", sensor["subtype"])
+            icon = "mdi:flash"
+            device_class = "None"
+        elif sensor["type"] == "temperature":
+            name = name + " " + sensor["type"]
             device_class = DEVICE_CLASS_TEMPERATURE
-            icon = 'mdi:thermometer'
+            icon = "mdi:thermometer"
             unit_of_measurement = TEMP_CELSIUS
-        elif sensor['type'] == 'movement':
-            name = name + ' ' + sensor['type']
-            device_class = 'None'
-            icon = 'mdi:run-fast'
-            unit_of_measurement = ''
-        elif sensor['type'] == 'pressure':
-            name = name + ' ' + sensor['type']
-            device_class = 'None'
-            icon = 'mdi:weight'
-            unit_of_measurement = 'Pa'
-        elif sensor['type'] == 'battery':
-            name = name + ' ' + sensor['type']
+        elif sensor["type"] == "movement":
+            name = name + " " + sensor["type"]
+            device_class = "None"
+            icon = "mdi:run-fast"
+            unit_of_measurement = ""
+        elif sensor["type"] == "pressure":
+            name = name + " " + sensor["type"]
+            device_class = "None"
+            icon = "mdi:weight"
+            unit_of_measurement = "Pa"
+        elif sensor["type"] == "battery":
+            name = name + " " + sensor["type"]
             device_class = DEVICE_CLASS_BATTERY
-            icon = 'mdi:battery'
-            unit_of_measurement = 'V'
-        elif sensor['type'] == 'vibration':
-            name = name + ' ' + sensor['type']
-            device_class = 'None'
-            icon = 'mdi:vibrate'
-            unit_of_measurement = ''
-        elif sensor['type'] == 'error':
-            name = name + ' ' + sensor['type']
-            device_class = 'None'
-            icon = 'mdi:skull'
-            unit_of_measurement = ''
-        elif sensor['type'] == 'water':
-            name = name + ' ' + sensor['type']
-            device_class = 'None'
-            icon = 'mdi:water'
+            icon = "mdi:battery"
+            unit_of_measurement = "V"
+        elif sensor["type"] == "vibration":
+            name = name + " " + sensor["type"]
+            device_class = "None"
+            icon = "mdi:vibrate"
+            unit_of_measurement = ""
+        elif sensor["type"] == "error":
+            name = name + " " + sensor["type"]
+            device_class = "None"
+            icon = "mdi:skull"
+            unit_of_measurement = ""
+        elif sensor["type"] == "water":
+            name = name + " " + sensor["type"]
+            device_class = "None"
+            icon = "mdi:water"
             unit_of_measurement = VOLUME_LITERS
-        elif sensor['type'] == 'light':
-            name = name + ' ' + sensor['type']
+        elif sensor["type"] == "light":
+            name = name + " " + sensor["type"]
             device_class = DEVICE_CLASS_ILLUMINANCE
-            icon = 'mdi:white-balance-sunny'
-            unit_of_measurement = 'lx'
-        elif sensor['type'] == 'proximity':
-            name = name + ' ' + sensor['type']
-            device_class = 'None'
-            icon = 'mdi:ruler'
-            unit_of_measurement = ''
-        elif sensor['type'] == 'humidity':
-            name = name + ' ' + sensor['type']
+            icon = "mdi:white-balance-sunny"
+            unit_of_measurement = "lx"
+        elif sensor["type"] == "proximity":
+            name = name + " " + sensor["type"]
+            device_class = "None"
+            icon = "mdi:ruler"
+            unit_of_measurement = ""
+        elif sensor["type"] == "humidity":
+            name = name + " " + sensor["type"]
             device_class = DEVICE_CLASS_HUMIDITY
-            icon = 'mdi:water-percent'
-            unit_of_measurement = '%'
-        elif sensor['type'] == 'gas':
-            device_class = 'None'
-            icon = 'mdi:gas-station'
+            icon = "mdi:water-percent"
+            unit_of_measurement = "%"
+        elif sensor["type"] == "gas":
+            device_class = "None"
+            icon = "mdi:gas-station"
             unit_of_measurement = VOLUME_LITERS
         else:
-            _LOGGER.warning('Unknown type: %s', sensor['type'])
+            _LOGGER.warning("Unknown type: %s", sensor["type"])
 
     return name, device_class, icon, unit_of_measurement
 
@@ -152,11 +156,11 @@ async def async_setup(hass, config):
     port = conf.get(CONF_PORT)
     ignored_devices = conf.get(CONF_IGNORE_DEVICES)
 
-    client_id = 'ha-flukso'
+    client_id = "ha-flukso"
     keepalive = DEFAULT_KEEPALIVE
     qos = DEFAULT_QOS
 
-    _LOGGER.debug('Config host: %s port %d', host, port)
+    _LOGGER.debug("Config host: %s port %d", host, port)
     _LOGGER.debug(ignored_devices)
 
     mqttc = mqtt.Client("ha-flukso-config-client")
@@ -164,9 +168,9 @@ async def async_setup(hass, config):
     @callback
     def on_connect(client, userdata, flags, rc):
         if rc > 0:
-            _LOGGER.error("Connected with result code "+str(rc))
+            _LOGGER.error("Connected with result code " + str(rc))
         else:
-            _LOGGER.debug('Config client connected to flukso')
+            _LOGGER.debug("Config client connected to flukso")
             client.subscribe("/device/+/config/flx")
 
     @callback
@@ -176,8 +180,7 @@ async def async_setup(hass, config):
         global sensor_config
 
         conftype = msg.topic.split("/")[4]
-
-        _LOGGER.debug('configuration type: %s', conftype)
+        _LOGGER.debug("configuration type: %s", conftype)
 
         if conftype == "sensor":
             sensors = []
@@ -185,27 +188,32 @@ async def async_setup(hass, config):
 
             sensor_config = json.loads(msg.payload)
             for key, sensor in sensor_config.items():
-                if ('enable' in sensor and sensor['enable'] == 1) and ('tmpo' not in sensor or sensor['tmpo'] == 1):
-                    if sensor['id'] not in ignored_devices:
-                        if 'class' in sensor and sensor['class'] == 'kube':
-                            sensor['name'] = kube_config[str(sensor['kid'])]['name']
-                            if 'type' in sensor and (sensor['type'] == 'movement' or sensor['type'] == 'vibration'):
-                                binary_sensors.append(sensor)
-                            elif 'type' in sensor and sensor['type'] == 'proximity':
-                                _LOGGER.debug('Ignoring proximity sensor: %s', sensor['name'])
-                            elif 'type' in sensor and sensor['type'] == 'vibration':
-                                binary_sensors.append(sensor)
-                            else:
-                                sensors.append(sensor)
-                        else:
-                            if 'port' in sensor:
-                                sensor['name'] = flx_config[str(sensor['port'][0])]['name']
-                            sensors.append(sensor)
+                if "enable" not in sensor or sensor["enable"] == 0:
+                    continue
+                if "tmpo" in sensor and sensor["tmpo"] == 0:
+                    continue
+                if sensor["id"] in ignored_devices:
+                    continue
+                if "class" in sensor and sensor["class"] == "kube":
+                    sensor["name"] = kube_config[str(sensor["kid"])]["name"]
+                    if "type" in sensor and (sensor["type"] == "movement" or
+                            sensor["type"] == "vibration"):
+                        binary_sensors.append(sensor)
+                    elif "type" in sensor and sensor["type"] == "proximity":
+                        _LOGGER.debug("Ignoring proximity sensor: %s",
+                            sensor["name"])
+                    else:
+                        sensors.append(sensor)
+                else:
+                    if "port" in sensor:
+                        sensor["name"] = flx_config[str(sensor["port"]
+                            [0])]["name"]
+                    sensors.append(sensor)
 
-            _LOGGER.debug('Loading platforms')
-            load_platform(hass, 'sensor', DOMAIN, sensors)
-            load_platform(hass, 'binary_sensor', DOMAIN, binary_sensors)
-            _LOGGER.debug('Done loading platforms')
+            _LOGGER.debug("Loading platforms")
+            load_platform(hass, "sensor", DOMAIN, sensors)
+            load_platform(hass, "binary_sensor", DOMAIN, binary_sensors)
+            _LOGGER.debug("Done loading platforms")
             mqttc.loop_stop()
             mqttc.disconnect()
         elif conftype == "flx":
@@ -217,22 +225,27 @@ async def async_setup(hass, config):
             mqttc.unsubscribe("/device/+/config/kube")
             mqttc.subscribe("/device/+/config/sensor")
         else:
-            _LOGGER.warning('unknown config type: %s', conftype)
+            _LOGGER.warning("unknown config type: %s", conftype)
 
     async def connect():
-        _LOGGER.debug('Connecting to Flukso Mqtt broker and listening for config messages')
+        _LOGGER.debug("Connecting to Flukso Mqtt broker and " \
+                "listening for config messages")
         mqttc.on_connect = on_connect
         mqttc.on_message = on_message
         mqttc.connect(host, port=port, keepalive=keepalive)
         mqttc.loop_start()
 
-    async def async_stop_mqtt(event: Event):
+    async def async_stop_mqtt(event:
+        Event):
         await hass.data[FLUKSO_CLIENT].async_disconnect()
 
     try:
-        hass.data[FLUKSO_CLIENT] = MQTT(hass, host, port, client_id, keepalive, None, None, None, None, None, None, None, None, None, tls_version)
+        hass.data[FLUKSO_CLIENT] = MQTT(hass, host, port, client_id,
+            keepalive, None, None, None, None, None, None, None, None, None,
+            tls_version)
     except socket.error:
-        _LOGGER.exception("Can't connect to the broker. Please check your settings and the broker itself")
+        _LOGGER.exception("Can't connect to the broker. " \
+                "Please check your settings and the broker itself")
         return False
 
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, async_stop_mqtt)

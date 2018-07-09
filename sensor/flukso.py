@@ -4,24 +4,26 @@ from typing import Optional
 
 import homeassistant.components.mqtt as mqtt
 from homeassistant.helpers.entity import Entity
-from custom_components.flukso import (FLUKSO_CLIENT, cv, vol, get_sensor_details)
+from custom_components.flukso import (FLUKSO_CLIENT, cv, vol,
+    get_sensor_details)
 from homeassistant.core import callback
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.helpers import template
 from homeassistant.components.sensor import ENTITY_ID_FORMAT
 from homeassistant.util import slugify
 
-DEPENDENCIES = ['flukso']
+DEPENDENCIES = ["flukso"]
 
 _LOGGER = logging.getLogger(__name__)
+
 
 @asyncio.coroutine
 def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
     if discovery_info is None:
-        _LOGGER.error('No discovery info for flukso platform sensor')
+        _LOGGER.error("No discovery info for flukso platform sensor")
         return
 
-    _LOGGER.info('Setting up flukso platform sensor')
+    _LOGGER.info("Setting up flukso platform sensor")
 
     @asyncio.coroutine
     def add_new_device(sensor):
@@ -36,37 +38,38 @@ def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
                 ok
             {% endif %}""", hass)
 
-        name, device_class, icon, unit_of_measurement = get_sensor_details(sensor)
+        name, device_class, icon, unit_of_measurement = get_sensor_details(
+            sensor)
 
-        _LOGGER.debug('adding sensor %s with id %s', name, sensor['id'])
-        data_type = sensor['data_type']
+        _LOGGER.debug("adding sensor %s with id %s", name, sensor["id"])
+        data_type = sensor["data_type"]
         t = default_template
-        if 'type' in sensor:
-            if sensor['type'] == 'electricity':
-                data_type = 'gauge'
-            if sensor['type'] == 'battery' or sensor['type'] == 'temperature':
+        if "type" in sensor:
+            if sensor["type"] == "electricity":
+                data_type = "gauge"
+            if sensor["type"] == "battery" or sensor["type"] == "temperature":
                 t = battery_template
-            if sensor['type'] == 'error':
+            if sensor["type"] == "error":
                 t = error_template
 
         fluksosensor = FluksoSensor(name=name,
-                state_topic="/sensor/"+sensor['id']+"/"+data_type, qos=0,
+                state_topic="/sensor/" + sensor["id"] + "/" + data_type, qos=0,
                 unit_of_measurement=unit_of_measurement, force_update=True,
                 expire_after=None, icon=icon, device_class=device_class,
                 value_template=t, json_attributes=[],
-                unique_id=ENTITY_ID_FORMAT.format(sensor['id']))
+                unique_id=ENTITY_ID_FORMAT.format(sensor["id"]))
         # Add device entity
         async_add_devices([fluksosensor])
 
     for sensor in discovery_info:
         hass.async_run_job(add_new_device, sensor)
 
+
 class FluksoSensor(Entity):
 
     def __init__(self, name, state_topic, qos, unit_of_measurement,
                  force_update, expire_after, icon, device_class: Optional[str],
                  value_template, json_attributes, unique_id: Optional[str]):
-
         self._state = STATE_UNKNOWN
         self._name = name
         self._state_topic = state_topic
@@ -122,7 +125,8 @@ class FluksoSensor(Entity):
             self._state = payload
             self.async_schedule_update_ha_state()
 
-        await self.hass.data[FLUKSO_CLIENT].async_subscribe(self._state_topic, message_received, self._qos, 'utf-8')
+        await self.hass.data[FLUKSO_CLIENT].async_subscribe(self._state_topic,
+            message_received, self._qos, "utf-8")
 
     @callback
     def value_is_expired(self, *_):
