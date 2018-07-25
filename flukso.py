@@ -195,7 +195,10 @@ async def async_setup(hass, config):
                 if sensor["id"] in ignored_devices:
                     continue
                 if "class" in sensor and sensor["class"] == "kube":
-                    sensor["name"] = kube_config[str(sensor["kid"])]["name"]
+                    if "name" in kube_config[str(sensor["kid"])] and kube_config[str(sensor["kid"])]["name"]:
+                        sensor["name"] = kube_config[str(sensor["kid"])]["name"]
+                    else:
+                        sensor["name"] = "unknown"
                     if "type" in sensor and (sensor["type"] == "movement" or
                             sensor["type"] == "vibration"):
                         binary_sensors.append(sensor)
@@ -206,8 +209,10 @@ async def async_setup(hass, config):
                         sensors.append(sensor)
                 else:
                     if "port" in sensor:
-                        sensor["name"] = flx_config[str(sensor["port"]
-                            [0])]["name"]
+                        if "name" in flx_config[str(sensor["port"][0])] and flx_config[str(sensor["port"][0])]["name"]
+                            sensor["name"] = flx_config[str(sensor["port"][0])]["name"]
+                        else:
+                            sensor["name"] = "unknown"
                     sensors.append(sensor)
 
             _LOGGER.debug("Loading platforms")
