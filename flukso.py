@@ -209,7 +209,7 @@ async def async_setup(hass, config):
                         sensors.append(sensor)
                 else:
                     if "port" in sensor:
-                        if "name" in flx_config[str(sensor["port"][0])] and flx_config[str(sensor["port"][0])]["name"]
+                        if "name" in flx_config[str(sensor["port"][0])] and flx_config[str(sensor["port"][0])]["name"]:
                             sensor["name"] = flx_config[str(sensor["port"][0])]["name"]
                         else:
                             sensor["name"] = "unknown"
