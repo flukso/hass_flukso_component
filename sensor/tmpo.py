@@ -7,6 +7,7 @@ https://home-assistant.io/components/sensor.history_stats/
 import datetime
 import logging
 import math
+import os
 
 import voluptuous as vol
 
@@ -14,7 +15,7 @@ import homeassistant.helpers.config_validation as cv
 import homeassistant.util.dt as dt_util
 from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import (
-    CONF_NAME, CONF_UNIT_OF_MEASUREMENT, CONF_TOKEN,
+    CONF_NAME, CONF_UNIT_OF_MEASUREMENT, CONF_TOKEN, CONF_SCAN_INTERVAL,
     EVENT_HOMEASSISTANT_START)
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.entity import Entity
@@ -36,6 +37,8 @@ ICON = 'mdi:chart-line'
 
 ATTR_VALUE = 'value'
 
+SCAN_INTERVAL = datetime.timedelta(minutes=15)
+
 def exactly_two_period_keys(conf):
     """Ensure exactly 2 of CONF_PERIOD_KEYS are provided."""
     if sum(param in conf for param in CONF_PERIOD_KEYS) != 2:
@@ -52,6 +55,7 @@ PLATFORM_SCHEMA = vol.All(PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_DURATION): cv.time_period,
     vol.Optional(CONF_UNIT_OF_MEASUREMENT): cv.string,
     vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+    vol.Optional(CONF_SCAN_INTERVAL, default=SCAN_INTERVAL): cv.time_period,
 }), exactly_two_period_keys)
 
 
@@ -65,13 +69,14 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     duration = config.get(CONF_DURATION)
     unit_of_measurement = config.get(CONF_UNIT_OF_MEASUREMENT)
     name = config.get(CONF_NAME)
+    scan_interval = config.get(CONF_SCAN_INTERVAL)
 
     for template in [start, end]:
         if template is not None:
             template.hass = hass
 
     add_devices([FluksoTmpoSensor(hass, sensor, token, start, end,
-                                    duration, unit_of_measurement, name)])
+                                    duration, unit_of_measurement, name, scan_interval)])
 
     return True
 
@@ -81,7 +86,7 @@ class FluksoTmpoSensor(Entity):
 
     def __init__(
             self, hass, sensor, token, start, end, duration,
-            unit_of_measurement, name):
+            unit_of_measurement, name, scan_interval):
         """Initialize the HistoryStats sensor."""
         import tmpo
         self._hass = hass
@@ -93,6 +98,7 @@ class FluksoTmpoSensor(Entity):
         self._end = end
         self._name = name
         self._unit_of_measurement = unit_of_measurement
+        self._scan_interval = scan_interval
 
         self._period = (datetime.datetime.now(), datetime.datetime.now())
         self.value = None
@@ -155,8 +161,6 @@ class FluksoTmpoSensor(Entity):
         # Parse templates
         self.update_period()
         start, end = self._period
-        
-        _LOGGER.debug("Period %s %s", start, end)
 
         # Convert times to UTC
         start = dt_util.as_utc(start)
@@ -172,14 +176,17 @@ class FluksoTmpoSensor(Entity):
         p_end_timestamp = math.floor(dt_util.as_timestamp(p_end))
         now_timestamp = math.floor(dt_util.as_timestamp(now))
 
-        _LOGGER.debug("Period (int) %s %s", start_timestamp, end_timestamp)
-
         # If period has not changed and current time after the period end...
         if start_timestamp == p_start_timestamp and \
             end_timestamp == p_end_timestamp and \
                 end_timestamp <= now_timestamp:
             # Don't compute anything as the value cannot have changed
             _LOGGER.debug("Period has not changed, do nothing.")
+            return
+
+        # wait for scan_interval seconds to update the value
+        if (end_timestamp + self._scan_interval.total_seconds()) <= now_timestamp:
+            _LOGGER.debug("Waiting for scan_interval")
             return
 
         _LOGGER.debug("Period has changed, syncing...")
