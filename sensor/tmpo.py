@@ -1,8 +1,8 @@
 """
-Component to make instant statistics about your history.
+Component to get tmpo data from flukso
 
-For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/sensor.history_stats/
+For more information about tmpo, visit
+https://github.com/flukso/tmpo-py
 """
 import datetime
 import logging
@@ -37,7 +37,7 @@ ICON = 'mdi:chart-line'
 
 ATTR_VALUE = 'value'
 
-SCAN_INTERVAL = datetime.timedelta(minutes=15)
+DEFAULT_SCAN_INTERVAL = datetime.timedelta(minutes=15)
 
 def exactly_two_period_keys(conf):
     """Ensure exactly 2 of CONF_PERIOD_KEYS are provided."""
@@ -55,7 +55,7 @@ SENSOR_SCHEMA = vol.Schema({
     vol.Optional(CONF_DURATION): cv.time_period,
     vol.Optional(CONF_UNIT_OF_MEASUREMENT): cv.string,
     vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-    vol.Optional(CONF_SCAN_INTERVAL, default=SCAN_INTERVAL): cv.time_period,
+    vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): cv.time_period,
 }, exactly_two_period_keys)
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
@@ -96,7 +96,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     return True
 
 class FluksoTmpoSensor(Entity):
-    """Representation of a HistoryStats sensor."""
+    """Representation of a tmpo flukso sensor."""
 
     def __init__(
             self, hass, session, sensor, token, start, end, duration,
@@ -190,21 +190,22 @@ class FluksoTmpoSensor(Entity):
             end_timestamp == p_end_timestamp and \
                 end_timestamp <= now_timestamp:
             # Don't compute anything as the value cannot have changed
+            # _LOGGER.debug("Values for %s have not changed", self._name)
             return
 
-        _LOGGER.debug("Trying to sync %s (last updated: %d)", self._name, self._last_updated)
-
-        if not self._session.sync(self._scan_interval) and \
-            self._last_updated and \
-            (self._last_updated + self._scan_interval.total_seconds()) > now_timestamp:
-            # No data has been synced, so do nothing
+        if self._last_updated and (self._last_updated + self._scan_interval.total_seconds()) > now_timestamp:
+            # no need to update yet
+            # _LOGGER.debug("No need to update %s yet", self._name)
             return
+
+        self._session.sync(self._scan_interval)
 
         _LOGGER.debug("Synced %s, updating value", self._name)
 
         sensor_series = self._session.tmposession.series(self._sensor, head=start_timestamp, tail=end_timestamp)
 
         self.value = sensor_series.diff().sum()
+        _LOGGER.debug("Value for %s updated", self._name)
         self._last_updated = now_timestamp
 
     def update_period(self):
@@ -256,7 +257,6 @@ class FluksoTmpoSensor(Entity):
 
 class FluksoTmpoSession:
     def __init__(self, hass):
-        """Initialize the HistoryStats sensor."""
         import tmpo
 
         cache_dir = hass.config.path("tmpo")
@@ -265,27 +265,40 @@ class FluksoTmpoSession:
             os.mkdir(cache_dir)
 
         self._session = tmpo.Session(path=cache_dir)
-        self._last_sync = datetime.datetime.now()
+        self._last_sync = None
 
     def add(self, sensor, token):
-        _LOGGER.debug("Adding sensor %s to session", sensor)
+        now = datetime.datetime.now()
         self._session.add(sensor, token)
+        _LOGGER.debug("Syncing...")
+        self._session.sync()
+        self._last_sync = now
+        _LOGGER.debug("Sync done")
 
     def sync(self, interval):
         now = datetime.datetime.now()
 
-        # Compute integer timestamps
-        last_sync_timestamp = math.floor(dt_util.as_timestamp(self._last_sync))
-        now_timestamp = math.floor(dt_util.as_timestamp(now))
-
-        # wait for interval seconds to update the value
-        if (last_sync_timestamp + interval.total_seconds()) <= now_timestamp:
-            _LOGGER.debug("Syncing data")
+        if not self._last_sync:
+            _LOGGER.debug("Syncing...")
             self._session.sync()
             self._last_sync = now
+            _LOGGER.debug("Sync done")
             return True
         else:
-            return False
+            # Compute integer timestamps
+            last_sync_timestamp = math.floor(dt_util.as_timestamp(self._last_sync))
+            now_timestamp = math.floor(dt_util.as_timestamp(now))
+
+            # wait for interval seconds to update the value
+            if (last_sync_timestamp + interval.total_seconds()) <= now_timestamp:
+                _LOGGER.debug("Syncing...")
+                self._session.sync()
+                self._last_sync = now
+                _LOGGER.debug("Sync done")
+                return True
+            else:
+                _LOGGER.debug("Not syncing data")
+                return False
 
     @property
     def tmposession(self):
