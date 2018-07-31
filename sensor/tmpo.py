@@ -15,8 +15,8 @@ import homeassistant.helpers.config_validation as cv
 import homeassistant.util.dt as dt_util
 from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import (
-    CONF_NAME, CONF_UNIT_OF_MEASUREMENT, CONF_TOKEN, CONF_SCAN_INTERVAL,
-    EVENT_HOMEASSISTANT_START)
+    CONF_NAME, CONF_UNIT_OF_MEASUREMENT, CONF_TOKEN, CONF_SCAN_INTERVAL, CONF_SENSORS,
+    EVENT_HOMEASSISTANT_START, ATTR_FRIENDLY_NAME)
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import track_state_change
@@ -47,7 +47,7 @@ def exactly_two_period_keys(conf):
     return conf
 
 
-PLATFORM_SCHEMA = vol.All(PLATFORM_SCHEMA.extend({
+SENSOR_SCHEMA = vol.Schema({
     vol.Required(CONF_SENSOR): cv.string,
     vol.Required(CONF_TOKEN): cv.string,
     vol.Optional(CONF_START): cv.template,
@@ -56,59 +56,68 @@ PLATFORM_SCHEMA = vol.All(PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_UNIT_OF_MEASUREMENT): cv.string,
     vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
     vol.Optional(CONF_SCAN_INTERVAL, default=SCAN_INTERVAL): cv.time_period,
-}), exactly_two_period_keys)
+}, exactly_two_period_keys)
 
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
+    vol.Required(CONF_SENSORS): vol.Schema({cv.slug: SENSOR_SCHEMA}),
+})
 
 # noinspection PyUnusedLocal
 def setup_platform(hass, config, add_devices, discovery_info=None):
-    """Set up the History Stats sensor."""
-    sensor = config.get(CONF_SENSOR)
-    token = config.get(CONF_TOKEN)
-    start = config.get(CONF_START)
-    end = config.get(CONF_END)
-    duration = config.get(CONF_DURATION)
-    unit_of_measurement = config.get(CONF_UNIT_OF_MEASUREMENT)
-    name = config.get(CONF_NAME)
-    scan_interval = config.get(CONF_SCAN_INTERVAL)
+    """Set up the tmpo sensors."""
 
-    for template in [start, end]:
-        if template is not None:
-            template.hass = hass
+    _LOGGER.info("Starting up tmpo platform")
+    sensors = []
+    session = FluksoTmpoSession(hass)
 
-    add_devices([FluksoTmpoSensor(hass, sensor, token, start, end,
-                                    duration, unit_of_measurement, name, scan_interval)])
+    for device, device_config in config[CONF_SENSORS].items():
+        friendly_name = device_config.get(ATTR_FRIENDLY_NAME, device)
+        sensor = device_config.get(CONF_SENSOR)
+        token = device_config.get(CONF_TOKEN)
+        start = device_config.get(CONF_START)
+        end = device_config.get(CONF_END)
+        duration = device_config.get(CONF_DURATION)
+        unit_of_measurement = device_config.get(CONF_UNIT_OF_MEASUREMENT)
+        scan_interval = device_config.get(CONF_SCAN_INTERVAL)
 
+        for template in [start, end]:
+            if template is not None:
+                template.hass = hass
+
+        sensors.append(FluksoTmpoSensor(hass, session, sensor, token, start, end,
+                                    duration, unit_of_measurement, friendly_name, scan_interval))
+
+    if not sensors:
+        _LOGGER.error("No tmpo sensors added")
+        return False
+
+    _LOGGER.info("Adding sensors")
+    add_devices(sensors)
     return True
-
 
 class FluksoTmpoSensor(Entity):
     """Representation of a HistoryStats sensor."""
 
     def __init__(
-            self, hass, sensor, token, start, end, duration,
-            unit_of_measurement, name, scan_interval):
-        """Initialize the HistoryStats sensor."""
-        import tmpo
+            self, hass, session, sensor, token, start, end, duration,
+            unit_of_measurement, friendly_name, scan_interval):
+        """Initialize the Flukso Tmpo sensor."""
         self._hass = hass
-
+        self._session = session
         self._sensor = sensor
         self._token = token
         self._duration = duration
         self._start = start
         self._end = end
-        self._name = name
+        self._name = friendly_name
         self._unit_of_measurement = unit_of_measurement
         self._scan_interval = scan_interval
 
         self._period = (datetime.datetime.now(), datetime.datetime.now())
         self.value = None
-        
-        cache_dir = self._hass.config.path("tmpo")
-        if not os.path.isdir(cache_dir):
-            _LOGGER.info("Create cache dir %s.", cache_dir)
-            os.mkdir(cache_dir)
-        
-        self._session = tmpo.Session(path=cache_dir)
+        self._last_updated = None
+
+        # Add sensor to the flukso tmpo session
         self._session.add(self._sensor, self._token)
 
         def force_refresh(*args):
@@ -181,21 +190,22 @@ class FluksoTmpoSensor(Entity):
             end_timestamp == p_end_timestamp and \
                 end_timestamp <= now_timestamp:
             # Don't compute anything as the value cannot have changed
-            _LOGGER.debug("Period has not changed, do nothing.")
             return
 
-        # wait for scan_interval seconds to update the value
-        if (end_timestamp + self._scan_interval.total_seconds()) <= now_timestamp:
-            _LOGGER.debug("Waiting for scan_interval")
+        _LOGGER.debug("Trying to sync %s (last updated: %d)", self._name, self._last_updated)
+
+        if not self._session.sync(self._scan_interval) and \
+            self._last_updated and \
+            (self._last_updated + self._scan_interval.total_seconds()) > now_timestamp:
+            # No data has been synced, so do nothing
             return
 
-        _LOGGER.debug("Period has changed, syncing...")
+        _LOGGER.debug("Synced %s, updating value", self._name)
 
-        self._session.sync()
-        
-        sensor_series = self._session.series(self._sensor, head=start_timestamp, tail=end_timestamp)
-        
+        sensor_series = self._session.tmposession.series(self._sensor, head=start_timestamp, tail=end_timestamp)
+
         self.value = sensor_series.diff().sum()
+        self._last_updated = now_timestamp
 
     def update_period(self):
         """Parse the templates and store a datetime tuple in _period."""
@@ -244,6 +254,42 @@ class FluksoTmpoSensor(Entity):
 
         self._period = start, end
 
+class FluksoTmpoSession:
+    def __init__(self, hass):
+        """Initialize the HistoryStats sensor."""
+        import tmpo
+
+        cache_dir = hass.config.path("tmpo")
+        if not os.path.isdir(cache_dir):
+            _LOGGER.info("Create cache dir %s.", cache_dir)
+            os.mkdir(cache_dir)
+
+        self._session = tmpo.Session(path=cache_dir)
+        self._last_sync = datetime.datetime.now()
+
+    def add(self, sensor, token):
+        _LOGGER.debug("Adding sensor %s to session", sensor)
+        self._session.add(sensor, token)
+
+    def sync(self, interval):
+        now = datetime.datetime.now()
+
+        # Compute integer timestamps
+        last_sync_timestamp = math.floor(dt_util.as_timestamp(self._last_sync))
+        now_timestamp = math.floor(dt_util.as_timestamp(now))
+
+        # wait for interval seconds to update the value
+        if (last_sync_timestamp + interval.total_seconds()) <= now_timestamp:
+            _LOGGER.debug("Syncing data")
+            self._session.sync()
+            self._last_sync = now
+            return True
+        else:
+            return False
+
+    @property
+    def tmposession(self):
+        return self._session
 
 class FluksoTmpoHelper:
     """Static methods to make the HistoryStatsSensor code lighter."""
