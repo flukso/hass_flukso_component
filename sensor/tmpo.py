@@ -13,12 +13,12 @@ import voluptuous as vol
 
 import homeassistant.helpers.config_validation as cv
 import homeassistant.util.dt as dt_util
-from homeassistant.components.sensor import PLATFORM_SCHEMA
+from homeassistant.components.sensor import PLATFORM_SCHEMA, ENTITY_ID_FORMAT
 from homeassistant.const import (
-    CONF_NAME, CONF_UNIT_OF_MEASUREMENT, CONF_TOKEN, CONF_SCAN_INTERVAL, CONF_SENSORS,
-    EVENT_HOMEASSISTANT_START, ATTR_FRIENDLY_NAME)
+    CONF_NAME, CONF_UNIT_OF_MEASUREMENT, CONF_TOKEN, CONF_SCAN_INTERVAL, CONF_SENSORS, CONF_FRIENDLY_NAME, CONF_ICON,
+    EVENT_HOMEASSISTANT_START)
 from homeassistant.exceptions import TemplateError
-from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity import Entity, async_generate_entity_id
 from homeassistant.helpers.event import track_state_change
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,12 +32,10 @@ CONF_END = 'end'
 CONF_DURATION = 'duration'
 CONF_PERIOD_KEYS = [CONF_START, CONF_END, CONF_DURATION]
 
-DEFAULT_NAME = 'unnamed sensor'
-ICON = 'mdi:chart-line'
+DEFAULT_ICON = 'mdi:flash'
+DEFAULT_SCAN_INTERVAL = datetime.timedelta(minutes=15)
 
 ATTR_VALUE = 'value'
-
-DEFAULT_SCAN_INTERVAL = datetime.timedelta(minutes=15)
 
 def exactly_two_period_keys(conf):
     """Ensure exactly 2 of CONF_PERIOD_KEYS are provided."""
@@ -54,7 +52,8 @@ SENSOR_SCHEMA = vol.Schema({
     vol.Optional(CONF_END): cv.template,
     vol.Optional(CONF_DURATION): cv.time_period,
     vol.Optional(CONF_UNIT_OF_MEASUREMENT): cv.string,
-    vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+    vol.Optional(CONF_FRIENDLY_NAME): cv.string,
+    vol.Optional(CONF_ICON, default=DEFAULT_ICON): cv.icon,
     vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): cv.time_period,
 }, exactly_two_period_keys)
 
@@ -71,7 +70,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     session = FluksoTmpoSession(hass)
 
     for device, device_config in config[CONF_SENSORS].items():
-        friendly_name = device_config.get(ATTR_FRIENDLY_NAME, device)
+        friendly_name = device_config.get(CONF_FRIENDLY_NAME, device)
         sensor = device_config.get(CONF_SENSOR)
         token = device_config.get(CONF_TOKEN)
         start = device_config.get(CONF_START)
@@ -79,13 +78,15 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
         duration = device_config.get(CONF_DURATION)
         unit_of_measurement = device_config.get(CONF_UNIT_OF_MEASUREMENT)
         scan_interval = device_config.get(CONF_SCAN_INTERVAL)
+        icon = device_config.get(CONF_ICON)
+        _LOGGER.debug("icon for %s: %s", friendly_name, str(icon))
 
         for template in [start, end]:
             if template is not None:
                 template.hass = hass
 
         sensors.append(FluksoTmpoSensor(hass, session, sensor, token, start, end,
-                                    duration, unit_of_measurement, friendly_name, scan_interval))
+                                    duration, unit_of_measurement, device, icon, friendly_name, scan_interval))
 
     if not sensors:
         _LOGGER.error("No tmpo sensors added")
@@ -100,19 +101,20 @@ class FluksoTmpoSensor(Entity):
 
     def __init__(
             self, hass, session, sensor, token, start, end, duration,
-            unit_of_measurement, friendly_name, scan_interval):
+            unit_of_measurement, device, icon, friendly_name, scan_interval):
         """Initialize the Flukso Tmpo sensor."""
         self._hass = hass
+        self.entity_id = async_generate_entity_id(ENTITY_ID_FORMAT, device, hass=hass)
         self._session = session
         self._sensor = sensor
         self._token = token
         self._duration = duration
         self._start = start
         self._end = end
+        self._icon = icon
         self._name = friendly_name
         self._unit_of_measurement = unit_of_measurement
         self._scan_interval = scan_interval
-
         self._period = (datetime.datetime.now(), datetime.datetime.now())
         self.value = None
         self._last_updated = None
@@ -160,7 +162,7 @@ class FluksoTmpoSensor(Entity):
     @property
     def icon(self):
         """Return the icon to use in the frontend, if any."""
-        return ICON
+        return self._icon
 
     def update(self):
         """Get the latest data and updates the states."""
@@ -190,12 +192,12 @@ class FluksoTmpoSensor(Entity):
             end_timestamp == p_end_timestamp and \
                 end_timestamp <= now_timestamp:
             # Don't compute anything as the value cannot have changed
-            # _LOGGER.debug("Values for %s have not changed", self._name)
+            _LOGGER.debug("Values for %s have not changed", self._name)
             return
 
         if self._last_updated and (self._last_updated + self._scan_interval.total_seconds()) > now_timestamp:
             # no need to update yet
-            # _LOGGER.debug("No need to update %s yet", self._name)
+            _LOGGER.debug("No need to update %s yet", self._name)
             return
 
         self._session.sync(self._scan_interval)
@@ -261,7 +263,7 @@ class FluksoTmpoSession:
 
         cache_dir = hass.config.path("tmpo")
         if not os.path.isdir(cache_dir):
-            _LOGGER.info("Create cache dir %s.", cache_dir)
+            _LOGGER.info("Create cache dir %s", cache_dir)
             os.mkdir(cache_dir)
 
         self._session = tmpo.Session(path=cache_dir)
@@ -270,7 +272,6 @@ class FluksoTmpoSession:
     def add(self, sensor, token):
         now = datetime.datetime.now()
         self._session.add(sensor, token)
-        _LOGGER.debug("Syncing...")
         self._session.sync()
         self._last_sync = now
         _LOGGER.debug("Sync done")
@@ -279,7 +280,6 @@ class FluksoTmpoSession:
         now = datetime.datetime.now()
 
         if not self._last_sync:
-            _LOGGER.debug("Syncing...")
             self._session.sync()
             self._last_sync = now
             _LOGGER.debug("Sync done")
@@ -291,13 +291,11 @@ class FluksoTmpoSession:
 
             # wait for interval seconds to update the value
             if (last_sync_timestamp + interval.total_seconds()) <= now_timestamp:
-                _LOGGER.debug("Syncing...")
                 self._session.sync()
                 self._last_sync = now
                 _LOGGER.debug("Sync done")
                 return True
             else:
-                _LOGGER.debug("Not syncing data")
                 return False
 
     @property
@@ -305,7 +303,7 @@ class FluksoTmpoSession:
         return self._session
 
 class FluksoTmpoHelper:
-    """Static methods to make the HistoryStatsSensor code lighter."""
+    """Static methods to make the FluksoTmpoSensor code lighter."""
 
     @staticmethod
     def handle_template_exception(ex, field):
