@@ -1,40 +1,8 @@
 """
-Component to get historic data from the flukso rest api
+Component to get tmpo data from flukso
 
-example config:
-
-sensor:
-  - platform: tmpo
-    sensors:
-      l1_pplus_wh_today:
-        sensor: "11223344556677889900aabbccddeeff"
-        token: "11223344556677889900aabbccddeeff"
-        start: "{{ now().replace(hour=0).replace(minute=0).replace(second=0) }}"
-        end: "{{ now() }}"
-        unit_of_measurement: "Wh"
-        scan_interval: 120
-      zonnepanelen_pminus_wh_today:
-        sensor: "11223344556677889900aabbccddeeff"
-        token: "11223344556677889900aabbccddeeff"
-        start: "{{ now().replace(hour=0).replace(minute=0).replace(second=0) }}"
-        end: "{{ now() }}"
-        unit_of_measurement: "Wh"
-        scan_interval: 120
-      l1_pplus_wh_yesterday:
-        sensor: "11223344556677889900aabbccddeeff"
-        token: "11223344556677889900aabbccddeeff"
-        start: "{{ (as_timestamp(now().replace(hour=0).replace(minute=0).replace(second=0)) - (24*3600)) | timestamp_local }}"
-        end: "{{ now().replace(hour=0).replace(minute=0).replace(second=0) }}"
-        unit_of_measurement: "Wh"
-        scan_interval: 60
-      l1_pminus_wh_yesterday:
-        sensor: "11223344556677889900aabbccddeeff"
-        token: "11223344556677889900aabbccddeeff"
-        start: "{{ (as_timestamp(now().replace(hour=0).replace(minute=0).replace(second=0)) - (24*3600)) | timestamp_local }}"
-        end: "{{ now().replace(hour=0).replace(minute=0).replace(second=0) }}"
-        unit_of_measurement: "Wh"
-        scan_interval: 60
-
+For more information about tmpo, visit
+https://github.com/flukso/tmpo-py
 """
 import datetime
 import logging
