@@ -16,7 +16,6 @@ DEPENDENCIES = ["flukso"]
 
 _LOGGER = logging.getLogger(__name__)
 
-
 @asyncio.coroutine
 def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
     if discovery_info is None:

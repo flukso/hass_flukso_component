@@ -21,9 +21,6 @@ _LOGGER = logging.getLogger(__name__)
 
 CONF_IGNORE_DEVICES = "ignore_devices"
 
-BINARY_SENSOR_ADD_CALLBACK = "flukso_add_binary_sensor"
-SENSOR_ADD_CALLBACK = "flukso_add_sensor"
-
 DOMAIN = "flukso"
 FLUKSO_CLIENT = "flukso_client"
 
@@ -216,8 +213,8 @@ async def async_setup(hass, config):
                     sensors.append(sensor)
 
             _LOGGER.debug("Loading platforms")
-            load_platform(hass, "sensor", DOMAIN, sensors)
-            load_platform(hass, "binary_sensor", DOMAIN, binary_sensors)
+            load_platform(hass, "sensor", DOMAIN, sensors, config)
+            load_platform(hass, "binary_sensor", DOMAIN, binary_sensors, config)
             _LOGGER.debug("Done loading platforms")
             mqttc.loop_stop()
             mqttc.disconnect()
