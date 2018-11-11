@@ -8,7 +8,6 @@ import datetime
 import logging
 import math
 import os
-import requests
 
 import voluptuous as vol
 
@@ -25,6 +24,7 @@ from homeassistant.helpers.event import track_state_change
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = 'tmpo'
+REQUIREMENTS = ['tmpo==0.2.10']
 
 CONF_SENSOR = 'sensor'
 CONF_START = 'start'
@@ -33,7 +33,7 @@ CONF_DURATION = 'duration'
 CONF_PERIOD_KEYS = [CONF_START, CONF_END, CONF_DURATION]
 
 DEFAULT_ICON = 'mdi:flash'
-DEFAULT_SCAN_INTERVAL = datetime.timedelta(minutes=15)
+DEFAULT_SCAN_INTERVAL = datetime.timedelta(minutes=5)
 
 ATTR_VALUE = 'value'
 
@@ -67,6 +67,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
 
     _LOGGER.info("Starting up tmpo platform")
     sensors = []
+    session = FluksoTmpoSession(hass)
 
     for device, device_config in config[CONF_SENSORS].items():
         friendly_name = device_config.get(CONF_FRIENDLY_NAME, device)
@@ -84,7 +85,7 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
             if template is not None:
                 template.hass = hass
 
-        sensors.append(FluksoTmpoSensor(hass, sensor, token, start, end,
+        sensors.append(FluksoTmpoSensor(hass, session, sensor, token, start, end,
                                     duration, unit_of_measurement, device, icon, friendly_name, scan_interval))
 
     if not sensors:
@@ -99,11 +100,12 @@ class FluksoTmpoSensor(Entity):
     """Representation of a tmpo flukso sensor."""
 
     def __init__(
-            self, hass, sensor, token, start, end, duration,
+            self, hass, session, sensor, token, start, end, duration,
             unit_of_measurement, device, icon, friendly_name, scan_interval):
         """Initialize the Flukso Tmpo sensor."""
         self._hass = hass
         self.entity_id = async_generate_entity_id(ENTITY_ID_FORMAT, device, hass=hass)
+        self._session = session
         self._sensor = sensor
         self._token = token
         self._duration = duration
@@ -116,6 +118,9 @@ class FluksoTmpoSensor(Entity):
         self._period = (datetime.datetime.now(), datetime.datetime.now())
         self.value = None
         self._last_updated = None
+
+        # Add sensor to the flukso tmpo session
+        self._session.add(self._sensor, self._token)
 
         def force_refresh(*args):
             """Force the component to refresh."""
@@ -187,73 +192,22 @@ class FluksoTmpoSensor(Entity):
             end_timestamp == p_end_timestamp and \
                 end_timestamp <= now_timestamp:
             # Don't compute anything as the value cannot have changed
-            _LOGGER.debug("No update for %s: period has not changed", self._name)
+            _LOGGER.debug("Values for %s have not changed", self._name)
             return
 
-        # compute the resolution for this period
-        delay = (now_timestamp - start_timestamp)
+        if self._last_updated and (self._last_updated + self._scan_interval.total_seconds()) > now_timestamp:
+            # no need to update yet
+            _LOGGER.debug("No need to update %s yet", self._name)
+            return
 
-        if delay < 7200: # 120 1min samples = 2 hours
-            resolution = 'min'
-            self._scan_interval = datetime.timedelta(minutes=1)
-        if delay < 172800: # 192 15min samples = 48 hours
-            resolution = '15min'
-            self._scan_interval = datetime.timedelta(minutes=15)
-        elif delay < 5184000: # 60 day samples
-            resolution = 'day'
-            self._scan_interval = datetime.timedelta(days=1)
-        elif delay < 314496000: # 520 week samples = 9,9 years
-            resolution = 'week'
-            self._scan_interval = datetime.timedelta(days=7)
-        else:
-            resolution = 'week'
-            self._scan_interval = datetime.timedelta(days=7)
-        
-        if self._last_updated:
-            seconds_left = (self._last_updated + self._scan_interval.total_seconds()) - now_timestamp
-            if seconds_left > 0:
-                # no need to update yet
-                _LOGGER.debug("No update for %s: scan_interval not reached yet. (%s seconds left)", self._name, seconds_left)
-                return
+        self._session.sync(self._scan_interval)
 
-        # get the new value
-        url = 'https://api.flukso.net/sensor/' + self._sensor
-        values = {
-            'start' : start_timestamp,
-            'end' : end_timestamp,
-            'unit' : 'watt',
-            'resolution': resolution
-        }
-        headers = {
-            'X-Version': '1.0',
-            'Accept' : 'application/json',
-            'X-Token' : self._token
-        }
-        r = requests.get(url, headers=headers, params=values, verify=False)
-        result = r.json()
+        _LOGGER.debug("Synced %s, updating value", self._name)
 
-        total = 0
-        for data in result[1:]:
-            time = data[0]
-            watts = data[1]
+        sensor_series = self._session.tmposession.series(self._sensor, head=start_timestamp, tail=end_timestamp)
 
-            if watts == 'nan':
-                continue
-
-            if watts != 'nan':
-                total += int(watts)
-
-        if resolution == 'min':
-            total = total/60.0
-        elif resolution == '15min':
-            total = total/4.0
-        elif resolution == 'day':
-            total = total * 24
-        else:
-            total = total * 168
-
-        self.value = total
-        _LOGGER.debug("Value for %s updated to %s", self._name, total)
+        self.value = sensor_series.diff().sum()
+        _LOGGER.debug("Value for %s updated", self._name)
         self._last_updated = now_timestamp
 
     def update_period(self):
@@ -302,6 +256,51 @@ class FluksoTmpoSensor(Entity):
             end = start + self._duration
 
         self._period = start, end
+
+class FluksoTmpoSession:
+    def __init__(self, hass):
+        import tmpo
+
+        cache_dir = hass.config.path("tmpo")
+        if not os.path.isdir(cache_dir):
+            _LOGGER.info("Create cache dir %s", cache_dir)
+            os.mkdir(cache_dir)
+
+        self._session = tmpo.Session(path=cache_dir)
+        self._last_sync = None
+
+    def add(self, sensor, token):
+        now = datetime.datetime.now()
+        self._session.add(sensor, token)
+        self._session.sync()
+        self._last_sync = now
+        _LOGGER.debug("Sync done")
+
+    def sync(self, interval):
+        now = datetime.datetime.now()
+
+        if not self._last_sync:
+            self._session.sync()
+            self._last_sync = now
+            _LOGGER.debug("Sync done")
+            return True
+        else:
+            # Compute integer timestamps
+            last_sync_timestamp = math.floor(dt_util.as_timestamp(self._last_sync))
+            now_timestamp = math.floor(dt_util.as_timestamp(now))
+
+            # wait for interval seconds to update the value
+            if (last_sync_timestamp + interval.total_seconds()) <= now_timestamp:
+                self._session.sync()
+                self._last_sync = now
+                _LOGGER.debug("Sync done")
+                return True
+            else:
+                return False
+
+    @property
+    def tmposession(self):
+        return self._session
 
 class FluksoTmpoHelper:
     """Static methods to make the FluksoTmpoSensor code lighter."""
