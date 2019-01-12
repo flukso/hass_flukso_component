@@ -28,7 +28,7 @@ CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
         vol.Optional(CONF_HOST): cv.string,
         vol.Optional(CONF_PORT, default=1883): cv.port,
-        vol.Optional(CONF_IGNORE_DEVICES, default=[]):
+        vol.Optional(CONF_IGNORE_SENSORS, default=[]):
             vol.All(cv.ensure_list, [cv.string]),
     }),
 }, extra=vol.ALLOW_EXTRA)  # what does this mean?
@@ -66,14 +66,12 @@ def get_sensor_details(sensor):
                     unit_of_measurement = "V"
                 elif sensor["subtype"] == "irms":
                     unit_of_measurement = "A"
-                # elif sensor["subtype"] == "pf":
-                #     unit_of_measurement = ""
-                # elif sensor["subtype"] == "vthd":
-                #     unit_of_measurement = ""
-                # elif sensor["subtype"] == "ithd":
-                #     unit_of_measurement = ""
-                # elif sensor["subtype"] == "alpha":
-                #     unit_of_measurement = ""
+                elif sensor["subtype"] == "pf":
+                    unit_of_measurement = ""
+                elif sensor["subtype"] == "vthd":
+                    unit_of_measurement = ""
+                elif sensor["subtype"] == "ithd":
+                    unit_of_measurement = ""
                 else:
                     unit_of_measurement = ""
                     _LOGGER.warning("Unknown subtype: %s", sensor["subtype"])
@@ -192,13 +190,13 @@ async def async_setup(hass, config):
                 if sensor["id"] in ignored_sensors:
                     continue
                 if "class" in sensor and sensor["class"] == "kube":
-                    if "name" in kube_config[str(sensor["kid"])] and
-                            kube_config[str(sensor["kid"])]["name"]:
+                    if ("name" in kube_config[str(sensor["kid"])] and
+                            kube_config[str(sensor["kid"])]["name"]):
                         sensor["name"] = kube_config[str(sensor["kid"])]["name"]
                     else:
                         sensor["name"] = "unknown"
-                    if "type" in sensor and (sensor["type"] == "movement" or
-                            sensor["type"] == "vibration"):
+                    if ("type" in sensor and (sensor["type"] == "movement" or
+                            sensor["type"] == "vibration")):
                         binary_sensors.append(sensor)
                     elif "type" in sensor and sensor["type"] == "proximity":
                         _LOGGER.debug("Ignoring proximity sensor: %s",
@@ -207,10 +205,10 @@ async def async_setup(hass, config):
                         sensors.append(sensor)
                 else:
                     if "port" in sensor:
-                        if "name" in flx_config[str(sensor["port"][0])] and
-                                flx_config[str(sensor["port"][0])]["name"]:
-                            sensor["name"] =
-                                flx_config[str(sensor["port"][0])]["name"]
+                        if ("name" in flx_config[str(sensor["port"][0])] and
+                                flx_config[str(sensor["port"][0])]["name"]):
+                            sensor["name"] = flx_config[str(sensor["port"][0])
+                                    ]["name"]
                         else:
                             sensor["name"] = "unknown"
                     sensors.append(sensor)
