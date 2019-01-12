@@ -4,9 +4,16 @@ Put the files in this repo in your [custom_components folder](https://developers
 ```
 flukso:
   host: my.flukso.ip
-  ignore_devices:
+  ignore_sensors:
     - 0123456789abcdef0123456789abcdef
+
+group:
+  default_view:
+    entities:
+      - sensor.abcdef0123456789abcdef0123456789
+      - ...
 ```
+
 If you want to see the debug messages in your home assistant logs, configure the logger as follows:
 ```
 logger:
@@ -18,6 +25,5 @@ logger:
 ```
 
 ### TODO:
-* See if we are satisfied with the current unique id. Currently, the id is [sensor type].[name]_[sensor hash] Maybe add the flukso id as well?
 * Integrate in HA source code and add autodiscovery
 * Add support for multiple Flukso's
