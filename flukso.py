@@ -19,7 +19,7 @@ DEPENDENCIES = ["mqtt"]
 
 _LOGGER = logging.getLogger(__name__)
 
-CONF_IGNORE_DEVICES = "ignore_devices"
+CONF_IGNORE_SENSORS = "ignore_sensors"
 
 DOMAIN = "flukso"
 FLUKSO_CLIENT = "flukso_client"
@@ -151,14 +151,14 @@ async def async_setup(hass, config):
     conf = config[DOMAIN]
     host = conf.get(CONF_HOST)
     port = conf.get(CONF_PORT)
-    ignored_devices = conf.get(CONF_IGNORE_DEVICES)
+    ignored_sensors = conf.get(CONF_IGNORE_SENSORS)
 
     client_id = "ha-flukso"
     keepalive = DEFAULT_KEEPALIVE
     qos = DEFAULT_QOS
 
     _LOGGER.debug("Config host: %s port %d", host, port)
-    _LOGGER.debug(ignored_devices)
+    _LOGGER.debug(ignored_sensors)
 
     mqttc = mqtt.Client("ha-flukso-config-client")
 
@@ -189,7 +189,7 @@ async def async_setup(hass, config):
                     continue
                 if "tmpo" in sensor and sensor["tmpo"] == 0:
                     continue
-                if sensor["id"] in ignored_devices:
+                if sensor["id"] in ignored_sensors:
                     continue
                 if "class" in sensor and sensor["class"] == "kube":
                     if "name" in kube_config[str(sensor["kid"])] and kube_config[str(sensor["kid"])]["name"]:
