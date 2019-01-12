@@ -192,7 +192,8 @@ async def async_setup(hass, config):
                 if sensor["id"] in ignored_sensors:
                     continue
                 if "class" in sensor and sensor["class"] == "kube":
-                    if "name" in kube_config[str(sensor["kid"])] and kube_config[str(sensor["kid"])]["name"]:
+                    if "name" in kube_config[str(sensor["kid"])] and
+                            kube_config[str(sensor["kid"])]["name"]:
                         sensor["name"] = kube_config[str(sensor["kid"])]["name"]
                     else:
                         sensor["name"] = "unknown"
@@ -206,8 +207,10 @@ async def async_setup(hass, config):
                         sensors.append(sensor)
                 else:
                     if "port" in sensor:
-                        if "name" in flx_config[str(sensor["port"][0])] and flx_config[str(sensor["port"][0])]["name"]:
-                            sensor["name"] = flx_config[str(sensor["port"][0])]["name"]
+                        if "name" in flx_config[str(sensor["port"][0])] and
+                                flx_config[str(sensor["port"][0])]["name"]:
+                            sensor["name"] =
+                                flx_config[str(sensor["port"][0])]["name"]
                         else:
                             sensor["name"] = "unknown"
                     sensors.append(sensor)
