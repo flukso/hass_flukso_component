@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from homeassistant.components.mqtt.binary_sensor import PLATFORM_SCHEMA as MQTT_BINARY_SENSOR_PLATFORM_SCHEMA
@@ -7,11 +8,10 @@ from homeassistant.components.binary_sensor import ENTITY_ID_FORMAT
 
 DEFAULT_TIMEOUT = 10
 
-DEPENDENCIES = ["flukso"]
-
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
+async def async_setup_platform(hass, config, async_add_devices,
+    discovery_info=None):
     if discovery_info is None:
         _LOGGER.error("No discovery info for flukso platform binary sensor")
         return
@@ -53,7 +53,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         config = MQTT_BINARY_SENSOR_PLATFORM_SCHEMA(mqttsensorconfig)
 
         # Add device entity
-        async_add_entities([MqttBinarySensor(config, None, None)])
+        async_add_devices([MqttBinarySensor(config, None, None)])
 
     for sensor in discovery_info:
         hass.async_run_job(add_new_device, sensor)

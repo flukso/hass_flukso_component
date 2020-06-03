@@ -6,11 +6,9 @@ from homeassistant.components.mqtt.sensor import MqttSensor
 from custom_components.flukso import get_sensor_details
 from homeassistant.components.sensor import ENTITY_ID_FORMAT
 
-DEPENDENCIES = ["flukso"]
-
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
+async def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
     if discovery_info is None:
         _LOGGER.error("No discovery info for flukso platform sensor")
         return
@@ -55,7 +53,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
         config = MQTT_SENSOR_PLATFORM_SCHEMA(mqttsensorconfig)
 
         # Add device entity
-        async_add_entities([MqttSensor(config, None, None)])
+        async_add_devices([MqttSensor(config, None, None)])
 
     for sensor in discovery_info:
         hass.async_run_job(add_new_device, sensor)
