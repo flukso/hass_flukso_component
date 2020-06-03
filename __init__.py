@@ -1,3 +1,4 @@
+"""The Flukso integration."""
 import logging
 import json
 import voluptuous as vol
@@ -13,13 +14,13 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
+from .const import DOMAIN
+
 DEPENDENCIES = ["mqtt"]
 
 _LOGGER = logging.getLogger(__name__)
 
 CONF_IGNORE_SENSORS = "ignore_sensors"
-
-DOMAIN = "flukso"
 
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
@@ -31,7 +32,6 @@ CONFIG_SCHEMA = vol.Schema({
 sensor_config = {}
 kube_config = {}
 flx_config = {}
-
 
 def get_sensor_details(sensor):
     name = "flukso sensor"
@@ -107,6 +107,7 @@ def get_sensor_details(sensor):
     return name, device_class, icon, unit_of_measurement
 
 async def async_setup(hass, config):
+    """Set up the Flukso component."""
 
     conf = config[DOMAIN]
     ignored_sensors = conf.get(CONF_IGNORE_SENSORS)
