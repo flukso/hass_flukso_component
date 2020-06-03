@@ -3,10 +3,10 @@ import logging
 
 from homeassistant.components.mqtt.binary_sensor import PLATFORM_SCHEMA as MQTT_BINARY_SENSOR_PLATFORM_SCHEMA
 from homeassistant.components.mqtt.binary_sensor import MqttBinarySensor
-from . import get_sensor_details
 from homeassistant.components.binary_sensor import ENTITY_ID_FORMAT
 
-DEFAULT_TIMEOUT = 10
+from .utils import get_sensor_details
+from .const import DEFAULT_TIMEOUT
 
 _LOGGER = logging.getLogger(__name__)
 

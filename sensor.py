@@ -3,8 +3,9 @@ import logging
 from homeassistant.components import mqtt
 from homeassistant.components.mqtt.sensor import PLATFORM_SCHEMA as MQTT_SENSOR_PLATFORM_SCHEMA
 from homeassistant.components.mqtt.sensor import MqttSensor
-from . import get_sensor_details
 from homeassistant.components.sensor import ENTITY_ID_FORMAT
+
+from .utils import get_sensor_details
 
 _LOGGER = logging.getLogger(__name__)
 
