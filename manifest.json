@@ -1,0 +1,15 @@
+{
+  "domain": "flukso",
+  "name": "Flukso",
+  "config_flow": true,
+  "documentation": "https://github.com/flukso/hass_flukso_component",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "dependencies": ["mqtt"],
+  "codeowners": [
+    "@icarus75",
+    "@bertouttier"
+  ]
+}
